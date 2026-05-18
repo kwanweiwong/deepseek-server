@@ -1,0 +1,63 @@
+const pool = require('./models/db');
+
+const createTablesIfNotExist = async () => {
+  try {
+    console.log('🔍 检查数据库表...');
+    
+    // 创建 users 表（如果不存在）
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        username VARCHAR(50) UNIQUE NOT NULL,
+        email VARCHAR(100) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // 创建 conversations 表（如果不存在）
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS conversations (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        user_id INT NOT NULL,
+        title VARCHAR(200) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+    
+    // 创建 messages 表（如果不存在）
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS messages (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        conversation_id INT NOT NULL,
+        role ENUM('user', 'assistant') NOT NULL,
+        content TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+      )
+    `);
+    
+    // 创建 knowledge_documents 表（如果不存在）
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS knowledge_documents (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        user_id INT NOT NULL,
+        title VARCHAR(200) NOT NULL,
+        doc_type VARCHAR(50) DEFAULT 'text',
+        content TEXT NOT NULL,
+        chunk_count INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        INDEX idx_user_id (user_id)
+      )
+    `);
+    
+    console.log('✅ 数据库表检查/创建完成！');
+  } catch (error) {
+    console.error('❌ 初始化数据库表失败:', error.message);
+    throw error;
+  }
+};
+
+module.exports = { createTablesIfNotExist };
