@@ -1,11 +1,10 @@
+import dotenv from 'dotenv';
+dotenv.config();
 import express, { Application, Request, Response } from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import { createTablesIfNotExist } from './init-db';
-
-dotenv.config();
 
 const app: Application = express();
 const server = http.createServer(app);
