@@ -1,8 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { io, Socket } from 'socket.io-client'
+import { ElMessage } from 'element-plus'
 import { conversationApi } from '@/api'
 import type { Conversation, Message, Model } from '@/types'
+
+let messageIdCounter = 0
+function nextMessageId() {
+  return `msg-${Date.now()}-${++messageIdCounter}`
+}
 
 export const useChatStore = defineStore('chat', () => {
   const conversations = ref<Conversation[]>([])
@@ -21,12 +27,13 @@ export const useChatStore = defineStore('chat', () => {
   // RAG 配置
   const useRAG = ref<boolean>(false)
 
-  function initSocket(): void {
+  function initSocket(token: string): void {
     if (socket.value) {
       socket.value.disconnect()
     }
-    socket.value = io('http://localhost:3000', {
-      transports: ['websocket', 'polling']
+    socket.value = io(import.meta.env.VITE_SOCKET_URL || '', {
+      transports: ['websocket', 'polling'],
+      auth: { token }
     })
 
     socket.value.on('chat-chunk', (data: { conversationId: number; chunk: string }) => {
@@ -51,7 +58,11 @@ export const useChatStore = defineStore('chat', () => {
 
     socket.value.on('chat-error', (data: { message: string }) => {
       isTyping.value = false
-      console.error('聊天错误:', data.message)
+      const lastMsg = messages.value[messages.value.length - 1]
+      if (lastMsg && lastMsg.role === 'assistant' && lastMsg.isStreaming) {
+        messages.value.pop()
+      }
+      ElMessage.error(data.message || '聊天请求失败')
     })
   }
 
@@ -104,15 +115,17 @@ export const useChatStore = defineStore('chat', () => {
     currentModel.value = modelValue
   }
 
-  function sendMessage(userId: number | undefined, message: string): void {
+  function sendMessage(message: string): void {
     if (!socket.value || !currentConversationId.value) return
 
     messages.value.push({
+      id: nextMessageId(),
       role: 'user',
       content: message
     })
 
     messages.value.push({
+      id: nextMessageId(),
       role: 'assistant',
       content: '',
       isStreaming: true
@@ -122,7 +135,6 @@ export const useChatStore = defineStore('chat', () => {
 
     socket.value.emit('chat-message', {
       conversationId: currentConversationId.value,
-      userId,
       message,
       model: currentModel.value,
       useRAG: useRAG.value

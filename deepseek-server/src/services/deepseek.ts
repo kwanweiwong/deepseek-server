@@ -1,8 +1,5 @@
 import axios from 'axios';
 import vectorDB from './vectorDB';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
 const SEARCH_API_KEY = process.env.SEARCH_API_KEY || '';
@@ -235,7 +232,11 @@ class DeepSeekService {
     let systemContent = `当前使用的模型是: ${modelToUse}。当前完整时间是: ${currentTimeInfo.full_datetime}。请根据这些信息回答用户问题。如果用户询问模型信息、当前日期或时间，请准确告知。如果用户需要更精确的时间，可以使用 get_current_time 工具获取。如果用户需要最新实时信息，请使用 web_search 工具进行搜索。`;
 
     if (ragPromptContent) {
-      systemContent += `\n\n${ragPromptContent}`;
+      systemContent = `当前使用的模型是: ${modelToUse}。当前完整时间是: ${currentTimeInfo.full_datetime}。
+
+你有一个知识库供参考。请优先基于【参考内容】回答用户问题，参考内容中没有的信息再结合你的知识补充。不要对参考内容中已有答案的问题调用 web_search 工具。
+
+${ragPromptContent}`;
     }
 
     const systemPrompt: ChatMessage = {
@@ -245,30 +246,26 @@ class DeepSeekService {
 
     const currentMessages: ChatMessage[] = [systemPrompt, ...messages];
 
-    const firstResponse = await axios.post(
-      DEEPSEEK_API_URL,
-      {
-        model: modelToUse,
-        messages: currentMessages,
-        temperature: this.temperature,
-        tools: TOOLS,
-        tool_choice: 'auto',
-        stream: false
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        }
-      }
-    );
+    // 第一次流式请求：逐 token 产出，结束后从 return 值获取 tool_calls
+    const iter1 = this.streamResponse(currentMessages, modelToUse);
+    let next1 = await iter1.next();
+    while (!next1.done) {
+      yield next1.value as string;
+      next1 = await iter1.next();
+    }
+    const { content: streamedContent, toolCalls } = next1.value;
 
-    const firstChoice = firstResponse.data.choices[0];
+    let hasOutput = streamedContent.length > 0;
 
-    if (firstChoice.message.tool_calls) {
-      currentMessages.push(firstChoice.message);
+    if (toolCalls && toolCalls.length > 0) {
+      const assistantMessage: ChatMessage = {
+        role: 'assistant',
+        content: streamedContent || '',
+        tool_calls: toolCalls
+      };
+      currentMessages.push(assistantMessage);
 
-      for (const toolCall of firstChoice.message.tool_calls) {
+      for (const toolCall of toolCalls) {
         let toolResult: string;
 
         try {
@@ -292,14 +289,42 @@ class DeepSeekService {
           content: toolResult
         });
       }
+
+      // 第二次流式请求
+      const iter2 = this.streamResponse(currentMessages, modelToUse);
+      let next2 = await iter2.next();
+      while (!next2.done) {
+        yield next2.value as string;
+        hasOutput = true;
+        next2 = await iter2.next();
+      }
+      // 二次响应剩余内容
+      if (next2.value.content) {
+        hasOutput = true;
+      }
     }
 
+    if (!hasOutput) {
+      yield '抱歉，我暂时无法回答这个问题，请稍后重试。';
+    }
+  }
+
+  /**
+   * 异步生成器：逐 token 产出 DeepSeek 流式响应文本。
+   * 遍历完成后，return 值携带 { content: 完整文本, toolCalls?: [...] }。
+   */
+  private async *streamResponse(
+    messages: ChatMessage[],
+    modelToUse: string
+  ): AsyncGenerator<string, { content: string; toolCalls?: ChatMessage['tool_calls'] }> {
     const response = await axios.post(
       DEEPSEEK_API_URL,
       {
         model: modelToUse,
-        messages: currentMessages,
+        messages,
         temperature: this.temperature,
+        tools: TOOLS,
+        tool_choice: 'auto',
         stream: true
       },
       {
@@ -307,30 +332,78 @@ class DeepSeekService {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.apiKey}`
         },
-        responseType: 'stream'
+        responseType: 'stream',
+        timeout: 120000
       }
     );
 
+    let content = '';
+    const toolCallMap = new Map<number, { id: string; name: string; arguments: string }>();
+    let finishReason = '';
+    let lineBuffer = '';
+
     for await (const chunk of response.data) {
-      const lines = (chunk as Buffer).toString().split('\n').filter(line => line.trim() !== '');
+      const text = (chunk as Buffer).toString();
+      lineBuffer += text;
+
+      const lines = lineBuffer.split('\n');
+      lineBuffer = lines.pop() || '';
 
       for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6);
-          if (data === '[DONE]') break;
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (!data || data === '[DONE]') continue;
 
-          try {
-            const parsed = JSON.parse(data);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) {
-              yield content;
-            }
-          } catch (e) {
-            continue;
+        try {
+          const parsed = JSON.parse(data);
+          const choice = parsed.choices?.[0];
+          finishReason = choice?.finish_reason || finishReason;
+          const delta = choice?.delta;
+
+          if (delta?.content) {
+            content += delta.content;
+            yield delta.content;
           }
+
+          if (delta?.tool_calls) {
+            for (const tc of delta.tool_calls) {
+              const entry = toolCallMap.get(tc.index) || { id: '', name: '', arguments: '' };
+              if (tc.id) entry.id = tc.id;
+              if (tc.function?.name) entry.name += tc.function.name;
+              if (tc.function?.arguments) entry.arguments += tc.function.arguments;
+              toolCallMap.set(tc.index, entry);
+            }
+          }
+        } catch {
+          continue;
         }
       }
     }
+
+    // 处理缓冲区中可能残留的最后一行
+    if (lineBuffer.startsWith('data: ') && lineBuffer.slice(6).trim() !== '[DONE]') {
+      try {
+        const parsed = JSON.parse(lineBuffer.slice(6).trim());
+        const delta = parsed.choices?.[0]?.delta;
+        if (delta?.content) {
+          content += delta.content;
+          yield delta.content;
+        }
+      } catch { /* ignore */ }
+    }
+
+    let toolCalls: ChatMessage['tool_calls'] | undefined;
+    if (finishReason === 'tool_calls' && toolCallMap.size > 0) {
+      toolCalls = Array.from(toolCallMap.entries())
+        .sort(([a], [b]) => a - b)
+        .map(([_, tc]) => ({
+          id: tc.id,
+          type: 'function' as const,
+          function: { name: tc.name, arguments: tc.arguments }
+        }));
+    }
+
+    return { content, toolCalls };
   }
 }
 

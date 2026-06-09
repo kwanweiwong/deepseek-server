@@ -11,8 +11,8 @@
 
       <el-tabs v-model="activeTab" class="login-tabs">
         <el-tab-pane label="登录" name="login">
-          <el-form :model="loginForm" label-position="top" class="login-form">
-            <el-form-item label="邮箱">
+          <el-form ref="loginFormRef" :model="loginForm" :rules="loginRules" label-position="top" class="login-form">
+            <el-form-item label="邮箱" prop="email">
               <el-input
                 v-model="loginForm.email"
                 type="email"
@@ -21,7 +21,7 @@
                 class="form-input"
               />
             </el-form-item>
-            <el-form-item label="密码">
+            <el-form-item label="密码" prop="password">
               <el-input
                 v-model="loginForm.password"
                 type="password"
@@ -47,8 +47,8 @@
         </el-tab-pane>
 
         <el-tab-pane label="注册" name="register">
-          <el-form :model="registerForm" label-position="top" class="login-form">
-            <el-form-item label="用户名">
+          <el-form ref="registerFormRef" :model="registerForm" :rules="registerRules" label-position="top" class="login-form">
+            <el-form-item label="用户名" prop="username">
               <el-input
                 v-model="registerForm.username"
                 placeholder="请输入用户名"
@@ -56,7 +56,7 @@
                 class="form-input"
               />
             </el-form-item>
-            <el-form-item label="邮箱">
+            <el-form-item label="邮箱" prop="email">
               <el-input
                 v-model="registerForm.email"
                 type="email"
@@ -65,7 +65,7 @@
                 class="form-input"
               />
             </el-form-item>
-            <el-form-item label="密码">
+            <el-form-item label="密码" prop="password">
               <el-input
                 v-model="registerForm.password"
                 type="password"
@@ -75,7 +75,7 @@
                 class="form-input"
               />
             </el-form-item>
-            <el-form-item label="确认密码">
+            <el-form-item label="确认密码" prop="confirmPassword">
               <el-input
                 v-model="registerForm.confirmPassword"
                 type="password"
@@ -108,7 +108,7 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { ChatLineRound } from '@element-plus/icons-vue'
 import { authApi } from '@/api'
 import { useUserStore } from '@/stores/user'
@@ -118,6 +118,8 @@ const userStore = useUserStore()
 
 const activeTab = ref('login')
 const loading = ref(false)
+const loginFormRef = ref<FormInstance>()
+const registerFormRef = ref<FormInstance>()
 
 const loginForm = ref({
   email: '',
@@ -131,9 +133,49 @@ const registerForm = ref({
   confirmPassword: ''
 })
 
+const loginRules: FormRules = {
+  email: [
+    { required: true, message: '请输入邮箱', trigger: 'blur' },
+    { type: 'email', message: '邮箱格式不正确', trigger: 'blur' }
+  ],
+  password: [
+    { required: true, message: '请输入密码', trigger: 'blur' }
+  ]
+}
+
+const registerRules: FormRules = {
+  username: [
+    { required: true, message: '请输入用户名', trigger: 'blur' },
+    { min: 2, max: 20, message: '用户名长度 2-20 个字符', trigger: 'blur' }
+  ],
+  email: [
+    { required: true, message: '请输入邮箱', trigger: 'blur' },
+    { type: 'email', message: '邮箱格式不正确', trigger: 'blur' }
+  ],
+  password: [
+    { required: true, message: '请输入密码', trigger: 'blur' },
+    { min: 6, message: '密码至少 6 位', trigger: 'blur' }
+  ],
+  confirmPassword: [
+    { required: true, message: '请再次输入密码', trigger: 'blur' },
+    {
+      validator: (_rule, value, callback) => {
+        if (value !== registerForm.value.password) {
+          callback(new Error('两次输入的密码不一致'))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
+  ]
+}
+
 async function handleLogin() {
-  if (!loginForm.value.email || !loginForm.value.password) {
-    ElMessage.warning('请填写邮箱和密码')
+  if (!loginFormRef.value) return
+  try {
+    await loginFormRef.value.validate()
+  } catch {
     return
   }
 
@@ -151,18 +193,10 @@ async function handleLogin() {
 }
 
 async function handleRegister() {
-  if (!registerForm.value.username || !registerForm.value.email || !registerForm.value.password) {
-    ElMessage.warning('请填写所有必填字段')
-    return
-  }
-
-  if (registerForm.value.password.length < 6) {
-    ElMessage.warning('密码至少6位')
-    return
-  }
-
-  if (registerForm.value.password !== registerForm.value.confirmPassword) {
-    ElMessage.warning('两次输入的密码不一致')
+  if (!registerFormRef.value) return
+  try {
+    await registerFormRef.value.validate()
+  } catch {
     return
   }
 

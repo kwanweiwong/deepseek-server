@@ -11,10 +11,10 @@ alias: {
 }
 },
 server: {
-port: 5173,
+port: 5175,
 proxy: {
 '/api': {
-target: 'http://localhost:3000',
+target: 'http://localhost:4001',
 changeOrigin: true
 }
 }

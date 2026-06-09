@@ -59,6 +59,11 @@ INDEX idx_user_id (user_id)
 )
 `);
 
+
+  // 添加性能索引（忽略已存在的）
+  try { await pool.query('CREATE INDEX idx_conversations_user_id ON conversations (user_id)'); } catch {}
+  try { await pool.query('CREATE INDEX idx_messages_conversation_id ON messages (conversation_id)'); } catch {}
+  try { await pool.query('CREATE INDEX idx_users_email ON users (email)'); } catch {}
 console.log('✅ 数据库表检查/创建完成！');
 } catch (error: any) {
 console.error('❌ 初始化数据库表失败:', error.message);

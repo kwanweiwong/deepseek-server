@@ -32,7 +32,16 @@ const MessageModel = {
   * @param conversationId - 对话 ID
   * @returns 返回消息数组
   */
-  async findByConversationId(conversationId: number): Promise<Message[]> {
+  async findByConversationId(conversationId: number, limit?: number): Promise<Message[]> {
+    if (limit) {
+      const [rows] = await pool.query<MessageRow[]>(
+        `SELECT * FROM (
+          SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ?
+        ) sub ORDER BY created_at ASC`,
+        [conversationId, limit]
+      );
+      return rows;
+    }
     const [rows] = await pool.execute<MessageRow[]>(
       'SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC',
       [conversationId]

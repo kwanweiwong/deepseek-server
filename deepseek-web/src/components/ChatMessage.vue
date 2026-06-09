@@ -20,18 +20,11 @@
 </template>
 
 <script setup>
-import { computed, onMounted, nextTick } from 'vue'
+import { computed } from 'vue'
 import { User, ChatDotRound } from '@element-plus/icons-vue'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
-
-const props = defineProps({
-  message: {
-    type: Object,
-    required: true
-  }
-})
 
 const md = new MarkdownIt({
   highlight: function (str, lang) {
@@ -44,6 +37,13 @@ const md = new MarkdownIt({
   },
   breaks: true,
   linkify: true
+})
+
+const props = defineProps({
+  message: {
+    type: Object,
+    required: true
+  }
 })
 
 const formattedContent = computed(() => {

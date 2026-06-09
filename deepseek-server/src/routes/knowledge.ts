@@ -37,16 +37,23 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
     ) as any[];
     const docId = result.insertId;
 
-    const vectorResult = await vectorDB.addDocument(
-      docId,
-      title,
-      content,
-      req.userId
-    );
+    let chunkCount = 0;
+    try {
+      const vectorResult = await vectorDB.addDocument(
+        docId,
+        title,
+        content,
+        req.userId
+      );
+      chunkCount = vectorResult.chunkCount;
+    } catch (vectorError) {
+      await pool.query('DELETE FROM knowledge_documents WHERE id = ?', [docId]);
+      throw vectorError;
+    }
 
     await pool.query(
       'UPDATE knowledge_documents SET chunk_count = ? WHERE id = ?',
-      [vectorResult.chunkCount, docId]
+      [chunkCount, docId]
     );
 
     res.json({
@@ -56,7 +63,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
         id: docId,
         title,
         docType,
-        chunkCount: vectorResult.chunkCount
+        chunkCount
       }
     });
   } catch (error) {
@@ -69,6 +76,9 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
     const docId = parseInt(req.params.id);
+    if (isNaN(docId)) {
+      return res.status(400).json({ success: false, message: '无效的文档ID' });
+    }
     const { title, content, docType = 'text' } = req.body;
 
     if (!title || !content) {
@@ -90,21 +100,33 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
       });
     }
 
+    const oldDoc = docs[0] as { title: string; content: string };
+
     await pool.query(
       'UPDATE knowledge_documents SET title = ?, doc_type = ?, content = ?, chunk_count = 0 WHERE id = ?',
       [title, docType, content, docId]
     );
 
-    const vectorResult = await vectorDB.updateDocument(
-      docId,
-      title,
-      content,
-      req.userId
-    );
+    let chunkCount = 0;
+    try {
+      const vectorResult = await vectorDB.updateDocument(
+        docId,
+        title,
+        content,
+        req.userId
+      );
+      chunkCount = vectorResult.chunkCount;
+    } catch (vectorError) {
+      await pool.query(
+        'UPDATE knowledge_documents SET title = ?, content = ? WHERE id = ?',
+        [oldDoc.title, oldDoc.content, docId]
+      );
+      throw vectorError;
+    }
 
     await pool.query(
       'UPDATE knowledge_documents SET chunk_count = ? WHERE id = ?',
-      [vectorResult.chunkCount, docId]
+      [chunkCount, docId]
     );
 
     res.json({
@@ -114,7 +136,7 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
         id: docId,
         title,
         docType,
-        chunkCount: vectorResult.chunkCount
+        chunkCount
       }
     });
   } catch (error) {
@@ -127,6 +149,9 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
 router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
     const docId = parseInt(req.params.id);
+    if (isNaN(docId)) {
+      return res.status(400).json({ success: false, message: '无效的文档ID' });
+    }
 
     const [docs] = await pool.query(
       'SELECT * FROM knowledge_documents WHERE id = ? AND user_id = ?',

@@ -1,10 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import UserModel from '../models/user';
-import dotenv from 'dotenv';
 import { Request, Response } from 'express';
-
-dotenv.config();
 
 const AuthController = {
   async register(req: Request, res: Response) {

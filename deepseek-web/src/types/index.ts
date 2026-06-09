@@ -21,7 +21,7 @@ export interface Conversation {
 }
 
 export interface Message {
-  id?: number
+  id?: number | string
   conversation_id?: number
   role: 'user' | 'assistant' | 'system'
   content: string

@@ -11,8 +11,8 @@
           <p>开始一段对话，探索无限可能</p>
         </div>
         <ChatMessage
-          v-for="(message, index) in messages"
-          :key="index"
+          v-for="message in messages"
+          :key="message.id"
           :message="message"
         />
       </div>
@@ -59,11 +59,11 @@ async function handleSendMessage(message) {
       await chatStore.selectConversation(conv.id)
     }
   }
-  chatStore.sendMessage(userStore.user?.id, message)
+  chatStore.sendMessage(message)
 }
 
 onMounted(async () => {
-  chatStore.initSocket()
+  chatStore.initSocket(userStore.token)
   await chatStore.loadConversations()
   
   if (conversations.value.length > 0) {

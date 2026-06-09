@@ -6,18 +6,31 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import { createTablesIfNotExist } from './init-db';
 
+// ==================== 启动时环境变量校验 ====================
+
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET || JWT_SECRET === '123456') {
+  console.warn('⚠️  警告: JWT_SECRET 未设置或使用默认值，请在生产环境中修改！');
+}
+
+if (!process.env.DEEPSEEK_API_KEY) {
+  console.error('❌ 错误: 未配置 DEEPSEEK_API_KEY，无法调用 AI 接口');
+  process.exit(1);
+}
+
+// ==================== 中间件配置 ====================
+
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5175';
 const app: Application = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    origin: FRONTEND_URL,
     methods: ['GET', 'POST']
   }
 });
 
-// ==================== 中间件配置 ====================
-
-app.use(cors());
+app.use(cors({ origin: FRONTEND_URL, credentials: true }));
 app.use(express.json());
 
 // ==================== 路由配置 ====================
