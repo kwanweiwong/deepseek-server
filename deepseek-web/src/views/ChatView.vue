@@ -24,7 +24,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, watch, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useChatStore } from '@/stores/chat'
@@ -38,7 +38,7 @@ const chatStore = useChatStore()
 const userStore = useUserStore()
 
 const { messages, currentConversationId, isTyping, conversations } = storeToRefs(chatStore)
-const messagesContainer = ref(null)
+const messagesContainer = ref<HTMLElement | null>(null)
 
 function scrollToBottom() {
   nextTick(() => {
@@ -52,7 +52,7 @@ watch(messages, () => {
   scrollToBottom()
 }, { deep: true })
 
-async function handleSendMessage(message) {
+async function handleSendMessage(message: string) {
   if (!currentConversationId.value) {
     const conv = await chatStore.createConversation()
     if (conv) {

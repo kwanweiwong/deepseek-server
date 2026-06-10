@@ -96,7 +96,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 import { ChatLineRound, Plus, ChatDotRound, Delete, User, SwitchButton, Document, Edit } from '@element-plus/icons-vue'

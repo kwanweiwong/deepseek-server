@@ -21,7 +21,18 @@
       "Bash(python generate_doc.py)",
       "Bash(python *)",
       "Bash(npm install *)",
-      "Bash(pnpm install *)"
+      "Bash(pnpm install *)",
+      "Bash(sc query *)",
+      "Bash(mysql *)",
+      "Bash(npx ts-node *)",
+      "Bash(node -e \"console.log\\('ok'\\)\")",
+      "Bash(node -e ' *)",
+      "Bash(node -e \"const jwt = require\\('jsonwebtoken'\\); console.log\\(jwt.sign\\({userId: 2}, '123456'\\)\\);\")",
+      "Bash(xxd \"E:\\\\前端项目\\\\deepSeek\\\\deepseek-web\\\\src\\\\views\\\\LoginView.vue\")",
+      "Bash(xxd-what \"E:\\\\前端项目\\\\deepSeek\\\\deepseek-web\\\\src\\\\views\\\\LoginView.vue\")",
+      "Bash(node -e \"const v = require\\('vue/package.json'\\); console.log\\('vue:', v.version\\)\")",
+      "Bash(node -e \"const p = require\\('@vitejs/plugin-vue/package.json'\\); console.log\\('@vitejs/plugin-vue:', p.version\\)\")",
+      "Bash(node -e \"const p = require\\('vue-tsc/package.json'\\); console.log\\('vue-tsc:', p.version\\)\")"
     ]
   }
 }

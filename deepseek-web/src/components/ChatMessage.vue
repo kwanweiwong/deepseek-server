@@ -19,7 +19,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { User, ChatDotRound } from '@element-plus/icons-vue'
 import MarkdownIt from 'markdown-it'
